@@ -48,17 +48,31 @@ ui <- fluidPage(
 
     
   navbarPage("COVID-19",
+             tabPanel("Overview",
+                      h3(textOutput("Overview1")),
+                      br(),
+                  #    mainPanel(
+                        plotOutput("ov_conf_graph"),
+                        br(),
+                        br(),
+                        plotOutput("ov_death_graph"),
+                       
+                        br()
+                #      ) #end main panel        
+             ), # end tabPanel Overview
+             
+             
              tabPanel("Worldwide Totals",
                         h3(textOutput("RawNumbers")),
                          br(),
-                mainPanel(
+                #mainPanel(
                          plotOutput("ww_raw_graph"),
                          br(),
                          br(),
                          plotOutput("ww_raw_death_graph"),
                         # h3(textOutput("PerMillionPop")),
                          br()
-                  ) #end main panel        
+               #   ) #end main panel        
                 ), # end tabPanel Worldwide Totals
              
              tabPanel("Worldwide Per Million",
@@ -107,6 +121,11 @@ server <- (function(input, output, session) {
   ##########################  ##########################  
   
   
+  output$Overview1 <- renderText({
+    ("Comparing United States with Rest of the World"
+    )
+  })
+  
   output$RawNumbers <- renderText({
     ("Selected Countries"
     )
@@ -132,6 +151,13 @@ server <- (function(input, output, session) {
     )
   })
   
+  output$ov_conf_graph <- renderPlot({
+    overall.confirm.graph
+  })
+  
+  output$ov_death_graph <- renderPlot({
+    overall.death.graph
+  })
   
   output$us_raw_graph <- renderPlot({
     graph.conf.us.raw

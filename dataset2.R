@@ -6,7 +6,6 @@ library(tidyverse)
 library(scales)
 library(lubridate)
 library(gridExtra)
-#library(wppExplorer)
 library(openintro)
 
 source("my_covid_scripts.R")
@@ -14,15 +13,17 @@ source("my_covid_scripts.R")
 # Turn off scientific notation
 options(scipen=999)
 
-
 #####
 # Establish cutoff time of day
-t <- Sys.time()
-t2 <- lubridate::hour(t) + lubridate::minute(t)/60
+#t <- Sys.time()
+#t1.5 <- with_tz(t, "UTC")
+#gmt.date <- as.Date(t1.5, origin = "1970-01-01", tz = "GMT")
 
 # Data from Johns Hopkins are updated daily around 7:59pm eastern time
-#  Set up date to be if time of day is less than 8:05pm eastern time, then use yesterday's date, else use today's date
-use.this.date <- (ifelse(t2 < (20 + 5/60), (Sys.Date() - 1), Sys.Date()))
+#  This is equiv to 11:59pm GMT (during daylight savings time)
+
+gmt.date2 <- as.Date(now("UTC"))
+use.this.date <- gmt.date2 - 1
 use.this.date <- as.Date(use.this.date, origin = "1970-01-01")
 
 # Get the dates we want to scrape the correct data
@@ -36,6 +37,7 @@ mytest <- paste0('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/mast
 
 # Get data into a data frame
 trythis <- lapply(mytest, read.csv)
+
 cvdata <- do.call(bind_rows, trythis)
 
 # copy the df
@@ -58,12 +60,6 @@ cvdata2 <- cvdata2 %>%
 
 # copy the df
 cvdata3 <- cvdata2
-
-#cvdata3 %>% 
-#  filter(Country.Reg == "US",
-#         Prov.State == "King County, WA" | Prov.State == "Washington") %>% 
-#
-#  View()
 
 # Now only keep the columns we want to keep
 cvdata3 <- cvdata3 %>% 
@@ -90,46 +86,64 @@ cvdata4 <- cvdata4 %>%
   separate(Date, c("date", "other"), sep = "([\\ \\T])") %>% 
   select(-other)
 
+str(cvdata4$date)
+
+cvdata4x <- cvdata4
+
+
+# Dates from Johns Hopkins are in a variety of formats and are not consistently
+#   formatted from one day to the next.
+#    This will get the dates to be in consistent format
+
+cvdata4x <- cvdata4x %>% 
+  mutate(date2 = date,
+         date3 = date) %>% 
+  separate(date, c("date", "other2", "other3"), sep = "([\\-])") %>%  # winner winner
+  separate(date, c("blah1", "blah2", "blah3"), sep = "([\\/])") %>%  # winner winner
+  mutate(newmonth = ifelse(blah1 == "2020", other2, blah1)) %>% 
+  mutate(newmonth2 = ifelse(is.na(newmonth), blah1, newmonth)) %>% 
+  #mutate(newmonth2 = ifelse(newmonth == other2, newmonth, blah1)) %>% 
+  #mutate(newday = ifelse(blah2 == "2020", other3, blah2)) %>% 
+  mutate(newday = ifelse(is.na(other3), blah2, other3)) %>% 
+  #mutate(newday2 = ifelse(is.na(newday), blah2, newday)) %>% 
+  select(date2, newmonth2, newday, other2, other3, blah1, blah2, blah3, everything())
+
+# Convert newmonth2 and newday to numeric
+cvdata4x$newmonth2 <- as.numeric(as.character(cvdata4x$newmonth2))
+cvdata4x$newday <- as.numeric(as.character(cvdata4x$newday))
+
+# verify no NA for month and day
+anyNA(cvdata4x$newmonth2)
+anyNA(cvdata4x$newday)
+
+# First get month and day to be two digits each
+#   Then create new date column
+cvdata4x <- cvdata4x %>% 
+  mutate(blah11 = sprintf("%02d", newmonth2)) %>% 
+  mutate(blah12 = sprintf("%02d", newday)) %>% 
+  mutate(newdate99 = paste("2020",
+                           blah11,
+                           blah12,
+                           sep = "-")) %>% 
+  select(newdate99, blah11, newmonth2, blah12, newday, everything())
+
+# copy df
+cvdata4y <- cvdata4x
+
+names(cvdata4y)
+
+# Keep appropriate columns
+cvdata4y <- cvdata4y %>% 
+  mutate(date = newdate99) %>% 
+  select(Prov.State, Country.Reg, City, date, Confirmed, Deaths,
+         Recovered, Active, Lat, Long)
+
 #copy the df
-cvdata5 <- cvdata4
+cvdata5 <- cvdata4y
 dim(cvdata5)
 
-# Get common date format for date column
-cvdata5 <- cvdata5 %>% 
-  mutate(date = ifelse(date == "1/22/2020", "2020-01-22", 
-                       ifelse(date == "1/31/2020", "2020-01-31",
-                              ifelse(date == "2/1/2020", "2020-02-01",
-                                     ifelse(date == "3/8/2020", "2020-03-08",
-                                            ifelse(date == "3/22/2020", "2020-03-22",
-                                                   date))))))
-
-# more dates that need to change
-cvdata5.dates_need_to_change <- cvdata5 %>% 
-  mutate(date = ifelse(date == "1/23/20", "2020-01-23",
-                       ifelse(date == "1/24/20", "2020-01-24",
-                              ifelse(date == "1/25/20", "2020-01-25",
-                                     ifelse(date == "1/26/20", "2020-01-26",
-                                            ifelse(date == "1/27/20", "2020-01-27",
-                                                   ifelse(date == "1/28/20", "2020-01-28",
-                                                          ifelse(date == "1/29/20", "2020-01-29",
-                                                                 ifelse(date == "1/30/20", "2020-01-30",
-                                                                        ifelse(date == "3/8/20", "2020-03-08",
-                                                                               ifelse(date == "3/22/20", "2020-03-22",
-                                                                                      ifelse(date == "2/23/20", "2020-02-23",
-                                                                                             ifelse(date == "3/21/20", "2020-03-21",
-                                                                                                    ifelse(date == "3/20/20", "2020-03-20",
-                                                                                                           ifelse(date == "3/19/20", "2020-03-19",
-                                                                                                                  ifelse(date == "3/18/20", "2020-03-18",
-                                                                                                                         ifelse(date == "3/16/20", "2020-03-16",
-                                                                                                                                ifelse(date == "3/14/20", "2020-03-14",
-                                                                                                                                       ifelse(date == "3/13/20", "2020-03-13",
-                                                                                                                                              ifelse(date == "3/12/20", "2020-03-12",
-                                                                                                                                                     
-                                                                        date)))))))))))))))))))) 
-                            
-
 # copy the df
-cvdata6 <- cvdata5.dates_need_to_change
+cvdata6 <- cvdata5
 
 # South Korea data is dirty for March 13. This will fix
 cvdata6 <- cvdata6 %>% 
@@ -154,8 +168,8 @@ cvdata6.us <- cvdata6 %>%
   mutate(blah4 = abbr2state(blah2.5)) %>% 
   mutate(PS3 = ifelse(is.na(blah4), PS2, blah4),
          State = PS3) %>% 
-  select(State, Country.Reg, City, date, Confirmed, Deaths, Recovered, Lat, Long,
-         Active) 
+  select(State, Country.Reg, City, date, Confirmed, Deaths, Recovered, Active, 
+         Lat, Long)
 
 # Find most recent date in data set
 maxdate <- max(cvdata6$date)
@@ -181,11 +195,6 @@ curr.us.counts <- bystate %>%
 curr.us.counts
 
 curr.us.death.rate <- round(((curr.us.counts$tot.deaths/curr.us.counts$tot.conf) * 100), 2)
-
-
-bystate %>% 
-  filter(State == "Washington") %>% 
-  View()
 
 # Johns Hopkins originally set up "South Korea" as a nation. They then changed
 #  the nomenclature to "Korea, South". Need to get this to be common
@@ -214,10 +223,6 @@ bycountry <- cvdata6 %>%
   arrange(desc(ww.conf), .by_group = TRUE) %>% 
   ungroup() 
 
-bycountry %>% 
-  filter(Country.Reg == "South Korea") %>% 
-  View()
-
 curr.ww.counts <- bycountry %>% 
   filter(date == maxdate) %>% 
   summarize(tot.conf = sum(ww.conf),
@@ -232,6 +237,80 @@ curr.ww.death.rate <- round(((curr.ww.counts$tot.deaths/curr.ww.counts$tot.conf)
 
 #################
 ################
+# worldwide data EXCLUDING USA
+ww.not.us <- cvdata6 %>% 
+  filter(Country.Reg != "US") %>% 
+  group_by(date) %>% 
+  summarize(ww.conf = sum(Confirmed),
+            ww.death = sum(Deaths),
+            ww.rec = sum(Recovered),
+            ww.act = sum(Active)) %>% 
+  mutate(region = "rest.of.world") %>% 
+  gather(type, cases, ww.conf:ww.death) 
+
+# USA only data
+us.only <- cvdata6 %>% 
+  filter(Country.Reg == "US") %>% 
+  group_by(date) %>% 
+  summarize(usa.conf = sum(Confirmed),
+            usa.death = sum(Deaths),
+            usa.rec = sum(Recovered),
+            usa.act = sum(Active)) %>% 
+  mutate(region = "USA") %>% 
+  gather(type, cases, usa.conf:usa.death)
+
+# Merge worldwide NOT USA, and USA-only
+mynewdf <- bind_rows(ww.not.us, us.only)
+
+# Overall Confirmed Cases
+overall.confirm.graph <- mynewdf %>% 
+  filter(type == "ww.conf" | type == "usa.conf") %>% 
+  ggplot(aes(x = date, y = cases, na.rm = TRUE,
+           color = region,
+           group = region
+)) +
+  geom_point(size = 3) + 
+  geom_line(size = 2) +
+  scale_colour_manual(values = c(cb.blue, cb.orange)) +
+  scale_x_date(date_labels="%b %d",date_breaks  ="1 week") +
+  scale_y_continuous(labels = comma) +
+  xlab("") +
+  ylab("Total") +
+  theme(panel.grid.minor = element_blank()) +
+  guides(color = guide_legend(title = NULL)) +
+  theme_bw() +
+  theme(legend.text = element_text(size = 14)) +
+  theme(axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13)) +
+  labs(title = "Worldwide Total Number of COVID-19 Confirmed Cases") +
+  theme(plot.title = element_text(size = 16))
+
+overall.death.graph <- mynewdf %>% 
+  filter(type == "ww.death" | type == "usa.death") %>% 
+  ggplot(aes(x = date, y = cases, na.rm = TRUE,
+             color = region,
+             group = region
+  )) +
+  geom_point(size = 3) + 
+  geom_line(size = 2) +
+  scale_colour_manual(values = c(cb.blue, cb.orange)) +
+  scale_x_date(date_labels="%b %d",date_breaks  ="1 week") +
+  scale_y_continuous(labels = comma) +
+  xlab("") +
+  ylab("Total") +
+  theme(panel.grid.minor = element_blank()) +
+  guides(color = guide_legend(title = NULL)) +
+  theme_bw() +
+  theme(legend.text = element_text(size = 14)) +
+  theme(axis.text.x = element_text(size = 13),
+        axis.text.y = element_text(size = 13),
+        axis.title.y = element_text(size = 13)) +
+  labs(title = "Worldwide Total Number of COVID-19 Deaths") +
+  theme(plot.title = element_text(size = 16))
+
+#################
+################
 # US States
 # |||||
 # VVVVV
@@ -239,8 +318,8 @@ curr.ww.death.rate <- round(((curr.ww.counts$tot.deaths/curr.ww.counts$tot.conf)
 # Selected States
 mystates <- bystate %>% 
   filter(State == "Michigan" | State ==  "Ohio" | State == "Texas" |
-           State == "Wisconsin" | State == "California" | State == "New York" |
-           State == "Washington") 
+           State == "Wisconsin" | State == "California" | #State == "New York" |
+           State == "Washington" | State == "Florida") 
 
 # Add population figures, and per capita and per 1mm info, into the data frame
 mystates <- mystates %>% 
@@ -249,7 +328,8 @@ mystates <- mystates %>%
                              ifelse(State == "Texas", txpop,
                                     ifelse(State == "Wisconsin", wipop,
                                            ifelse(State == "California", capop,
-                                                  ifelse(State == "New York", nypop,
+                                                  ifelse(State == "Florida", flpop,
+                                                  #ifelse(State == "New York", nypop,
                                                          wapop))))))) %>% 
   mutate(per.cap.conf = us.conf/pop,
          conf.per1mm = per.cap.conf * mill,
@@ -423,8 +503,7 @@ graph.death.ww.raw
 
 # next steps
 # shiny dashboard
-# clean up italy and china numbers around March 8-15
-# clean up state of WA numbers on March 8, 9
+
 
 
 #################
